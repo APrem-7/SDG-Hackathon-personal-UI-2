@@ -1,7 +1,7 @@
 import React from "react";
 
 const Header = ({ activeTab, onTabChange }) => {
-  const navItems = ["Dashboard", "AI Chat", "Analytics"];
+  const navItems = ["Dashboard", "AI Chat", "Analytics", "Traffic Control"];
 
   return (
     <header className="header">

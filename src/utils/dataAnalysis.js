@@ -238,3 +238,288 @@ export const suggestChartType = (analysis) => {
     reasoning: "Default bar chart",
   };
 };
+
+// ==================== TRAFFIC CONTROL TOWER FEATURES ====================
+
+/**
+ * 🚚 Traffic Control Tower: Analyzes terminal operations data
+ * @param {Array} data - Shipment/terminal data
+ * @returns {Object} - Traffic analysis insights
+ */
+export const analyzeTrafficControlTower = (data) => {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return { isEmpty: true };
+  }
+
+  const analysis = analyzeDataStructure(data);
+  const fields = analysis.fields;
+
+  // Detect terminal-specific fields
+  const laneFields = fields.filter(f => 
+    f.toLowerCase().includes('lane') || 
+    f.toLowerCase().includes('bay') ||
+    f.toLowerCase().includes('dock') ||
+    f.toLowerCase().includes('gate')
+  );
+
+  const shipmentFields = fields.filter(f =>
+    f.toLowerCase().includes('shipment') ||
+    f.toLowerCase().includes('ticket') ||
+    f.toLowerCase().includes('load') ||
+    f.toLowerCase().includes('truck')
+  );
+
+  const timeFields = analysis.analysis.temporalFields;
+
+  return {
+    isEmpty: false,
+    recordCount: data.length,
+    
+    // Terminal Infrastructure
+    laneFields,
+    shipmentFields,
+    timeFields,
+    
+    // Traffic Analysis
+    laneMetrics: calculateLaneMetrics(data, laneFields),
+    congestionAnalysis: analyzeCongestion(data, laneFields, timeFields),
+    turnaroundTimes: calculateTurnaroundTimes(data, timeFields),
+    stuckShipments: detectStuckShipments(data, shipmentFields, timeFields),
+    utilizationScores: calculateUtilizationScores(data, laneFields),
+    
+    // Real-time Alerts
+    alerts: generateTrafficAlerts(data, laneFields, timeFields),
+    
+    // Performance KPIs
+    kpis: calculateTrafficKPIs(data, laneFields, timeFields)
+  };
+};
+
+/**
+ * Calculate metrics per lane/bay
+ */
+const calculateLaneMetrics = (data, laneFields) => {
+  if (laneFields.length === 0) return {};
+
+  const primaryLane = laneFields[0];
+  const laneStats = {};
+
+  data.forEach(row => {
+    const lane = row[primaryLane];
+    if (!lane) return;
+
+    if (!laneStats[lane]) {
+      laneStats[lane] = {
+        name: lane,
+        totalShipments: 0,
+        avgWaitTime: 0,
+        efficiency: 'A', // Will calculate
+        congestionLevel: 'Normal'
+      };
+    }
+    laneStats[lane].totalShipments++;
+  });
+
+  return laneStats;
+};
+
+/**
+ * Analyze lane congestion patterns
+ */
+const analyzeCongestion = (data, laneFields, timeFields) => {
+  if (laneFields.length === 0 || timeFields.length === 0) return {};
+
+  const primaryLane = laneFields[0];
+  const primaryTime = timeFields[0];
+  const congestionMap = {};
+
+  // Group by hour to detect peak times
+  data.forEach(row => {
+    const lane = row[primaryLane];
+    const timestamp = row[primaryTime];
+    
+    if (!lane || !timestamp) return;
+
+    const hour = new Date(timestamp).getHours();
+    const key = `${lane}_${hour}`;
+    
+    congestionMap[key] = (congestionMap[key] || 0) + 1;
+  });
+
+  // Determine congestion levels
+  const congestionLevels = {};
+  Object.entries(congestionMap).forEach(([key, count]) => {
+    const [lane, hour] = key.split('_');
+    if (!congestionLevels[lane]) congestionLevels[lane] = {};
+    
+    let level = 'Normal';
+    if (count > 10) level = 'Heavy';
+    else if (count > 5) level = 'Moderate';
+    
+    congestionLevels[lane][hour] = { count, level };
+  });
+
+  return congestionLevels;
+};
+
+/**
+ * Calculate turnaround times (if start/end times available)
+ */
+const calculateTurnaroundTimes = (data, timeFields) => {
+  if (timeFields.length < 2) return null;
+
+  const startField = timeFields[0];
+  const endField = timeFields[1];
+  const turnaroundTimes = [];
+
+  data.forEach(row => {
+    const startTime = new Date(row[startField]);
+    const endTime = new Date(row[endField]);
+    
+    if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+      const turnaround = (endTime - startTime) / (1000 * 60); // minutes
+      turnaroundTimes.push({
+        shipmentId: row.shipment_id || row.ticket_id || 'Unknown',
+        turnaroundMinutes: turnaround,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString()
+      });
+    }
+  });
+
+  return {
+    avgTurnaround: turnaroundTimes.reduce((sum, t) => sum + t.turnaroundMinutes, 0) / turnaroundTimes.length,
+    maxTurnaround: Math.max(...turnaroundTimes.map(t => t.turnaroundMinutes)),
+    minTurnaround: Math.min(...turnaroundTimes.map(t => t.turnaroundMinutes)),
+    details: turnaroundTimes
+  };
+};
+
+/**
+ * Detect stuck/delayed shipments
+ */
+const detectStuckShipments = (data, shipmentFields, timeFields) => {
+  const STUCK_THRESHOLD_MINUTES = 90; // 1.5 hours
+  const stuckShipments = [];
+
+  if (timeFields.length < 2) return stuckShipments;
+
+  const turnaroundData = calculateTurnaroundTimes(data, timeFields);
+  if (!turnaroundData) return stuckShipments;
+
+  turnaroundData.details.forEach(shipment => {
+    if (shipment.turnaroundMinutes > STUCK_THRESHOLD_MINUTES) {
+      stuckShipments.push({
+        ...shipment,
+        status: 'DELAYED',
+        delayMinutes: shipment.turnaroundMinutes - 45, // Assuming 45min is normal
+        severity: shipment.turnaroundMinutes > 180 ? 'CRITICAL' : 'WARNING'
+      });
+    }
+  });
+
+  return stuckShipments;
+};
+
+/**
+ * Calculate lane utilization scores
+ */
+const calculateUtilizationScores = (data, laneFields) => {
+  if (laneFields.length === 0) return {};
+
+  const primaryLane = laneFields[0];
+  const laneScores = {};
+  const laneCounts = {};
+
+  // Count shipments per lane
+  data.forEach(row => {
+    const lane = row[primaryLane];
+    if (lane) {
+      laneCounts[lane] = (laneCounts[lane] || 0) + 1;
+    }
+  });
+
+  // Calculate scores (A-F grading)
+  const maxCount = Math.max(...Object.values(laneCounts));
+  Object.entries(laneCounts).forEach(([lane, count]) => {
+    const utilization = count / maxCount;
+    let grade = 'F';
+    if (utilization >= 0.9) grade = 'A';
+    else if (utilization >= 0.7) grade = 'B';
+    else if (utilization >= 0.5) grade = 'C';
+    else if (utilization >= 0.3) grade = 'D';
+    
+    laneScores[lane] = {
+      grade,
+      utilization: utilization * 100,
+      shipmentCount: count,
+      efficiency: utilization >= 0.8 ? 'High' : utilization >= 0.5 ? 'Medium' : 'Low'
+    };
+  });
+
+  return laneScores;
+};
+
+/**
+ * Generate real-time traffic alerts
+ */
+const generateTrafficAlerts = (data, laneFields, timeFields) => {
+  const alerts = [];
+  
+  // Add stuck shipment alerts
+  const stuckShipments = detectStuckShipments(data, [], timeFields);
+  stuckShipments.forEach(shipment => {
+    alerts.push({
+      type: 'DELAY',
+      severity: shipment.severity,
+      message: `⚠️ Shipment ${shipment.shipmentId} delayed for ${Math.round(shipment.delayMinutes)} minutes`,
+      timestamp: new Date().toISOString(),
+      data: shipment
+    });
+  });
+
+  // Add congestion alerts
+  const congestion = analyzeCongestion(data, laneFields, timeFields);
+  Object.entries(congestion).forEach(([lane, hours]) => {
+    Object.entries(hours).forEach(([hour, info]) => {
+      if (info.level === 'Heavy') {
+        alerts.push({
+          type: 'CONGESTION',
+          severity: 'WARNING',
+          message: `🚨 Heavy congestion in ${lane} at ${hour}:00 (${info.count} shipments)`,
+          timestamp: new Date().toISOString(),
+          data: { lane, hour, count: info.count }
+        });
+      }
+    });
+  });
+
+  return alerts;
+};
+
+/**
+ * Calculate key performance indicators
+ */
+const calculateTrafficKPIs = (data, laneFields, timeFields) => {
+  const totalShipments = data.length;
+  const uniqueLanes = laneFields.length > 0 ? 
+    [...new Set(data.map(row => row[laneFields[0]]).filter(Boolean))].length : 0;
+  
+  const turnaroundData = calculateTurnaroundTimes(data, timeFields);
+  const avgTurnaround = turnaroundData ? turnaroundData.avgTurnaround : null;
+  
+  const stuckCount = detectStuckShipments(data, [], timeFields).length;
+  const onTimePercentage = totalShipments > 0 ? 
+    ((totalShipments - stuckCount) / totalShipments * 100).toFixed(1) : 100;
+
+  return {
+    totalShipments,
+    activeLanes: uniqueLanes,
+    avgTurnaroundMinutes: avgTurnaround ? Math.round(avgTurnaround) : null,
+    onTimePercentage: parseFloat(onTimePercentage),
+    delayedShipments: stuckCount,
+    operationalEfficiency: onTimePercentage > 90 ? 'Excellent' : 
+                          onTimePercentage > 80 ? 'Good' : 
+                          onTimePercentage > 70 ? 'Fair' : 'Poor'
+  };
+};

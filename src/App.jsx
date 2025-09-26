@@ -4,6 +4,7 @@ import Header from "./components/Header.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import AIChat from "./pages/AIChat.jsx";
 import Analytics from "./pages/Analytics.jsx";
+import TrafficControlTower from "./pages/TrafficControlTower.jsx";
 
 const App = () => {
   const [activeTab, setActiveTab] = useState("Dashboard");
@@ -16,6 +17,8 @@ const App = () => {
         return <AIChat />;
       case "Analytics":
         return <Analytics />;
+      case "Traffic Control":
+        return <TrafficControlTower />;
       default:
         return <Dashboard />;
     }
