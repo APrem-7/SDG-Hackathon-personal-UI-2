@@ -337,6 +337,97 @@ body {
   color: #64748b;
 }
 
+.api-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.api-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.api-badge.loading {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.api-badge.error {
+  background-color: #ef4444;
+  color: white;
+}
+
+.api-badge.success {
+  background-color: #10b981;
+  color: white;
+}
+
+/* Query Section Styles */
+.query-section {
+  background-color: white;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.query-input-container {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.query-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  transition: all 0.2s;
+  background-color: #f9fafb;
+}
+
+.query-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: white;
+}
+
+.query-input:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.query-btn {
+  padding: 0.75rem 1.5rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.query-btn:hover:not(:disabled) {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.query-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .analytics-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -607,6 +698,29 @@ body {
   background-color: #3b82f6;
   color: white;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.view-button.api-test {
+  background-color: #10b981;
+  color: white;
+}
+
+.view-button.api-test:hover:not(:disabled) {
+  background-color: #047857;
+}
+
+.view-button.refresh {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.view-button.refresh:hover:not(:disabled) {
+  background-color: #d97706;
+}
+
+.view-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* GraphicWalker Styles */
