@@ -32,10 +32,24 @@ A React-based analytics dashboard that replicates the ShipmentIQ Analytics inter
 
 4. Start the development server:
    ```bash
+   npm run dev
+   # or
    npm start
    ```
 
 5. Open your browser and visit `http://localhost:3000`
+
+### Build for Production
+
+```bash
+npm run build
+```
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
 
 ## Project Structure
 
@@ -105,6 +119,7 @@ The foundation is set to easily add:
 ## Technologies Used
 
 - **React 18**: Modern React with hooks
+- **Vite**: Fast build tool and development server
 - **CSS3**: Custom styling with flexbox and grid
 - **JavaScript ES6+**: Modern JavaScript features
 
