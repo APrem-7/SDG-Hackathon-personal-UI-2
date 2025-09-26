@@ -1,225 +1,100 @@
 import React, { useState, useEffect, useRef } from "react";
 import vegaEmbed from "vega-embed";
-import axios from "axios";
 import { GraphicWalker } from "@kanaries/graphic-walker";
+
+import { generateDynamicChart } from "../utils/chartGeneration.js";
+import {
+  generateGraphicWalkerFields,
+  validateDataForGraphicWalker,
+} from "../utils/fieldMapping.js";
+import {
+  fetchDataFromLangChain,
+  testLangChainConnectivity,
+  generateMockData,
+  formatAPIError,
+} from "../services/apiService.js";
 
 const Analytics = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
-  const [activeView, setActiveView] = useState("charts"); // 'charts' or 'graphicwalker'
+  const [activeView, setActiveView] = useState("charts");
   const [queryInput, setQueryInput] = useState("");
+  const [sqlQuery, setSqlQuery] = useState("");
+  const [userQuestion, setUserQuestion] = useState("");
+  const [error, setError] = useState(null);
   const chartRef = useRef(null);
 
-  // Fetch data from LangChain backend
-  const fetchData = async (userQuestion = "Show me all shipment data for analytics") => {
+  // Fetch data from LangChain backend using the new API service
+  const fetchData = async (
+    question = "Show me a general overview of my shipment data"
+  ) => {
     setLoading(true);
+    setError(null);
+
     try {
-      const endpoint = "https://langchain-backend.loca.lt/query";
-      
-      console.log(`Querying LangChain backend: ${endpoint}`);
-      console.log(`Question: ${userQuestion}`);
-      
-      const response = await axios.post(endpoint, {
-        question: userQuestion
-      }, {
-        timeout: 30000, // 30 seconds for AI processing
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
-      });
-      
-      console.log("LangChain AI pipeline response:", response.data);
-      
-      if (response && response.data) {
-        // Handle different response formats from LangChain
-        let processedData = [];
-        
-        if (Array.isArray(response.data)) {
-          processedData = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          processedData = response.data.data;
-        } else if (response.data.results && Array.isArray(response.data.results)) {
-          processedData = response.data.results;
-        } else if (typeof response.data === 'object') {
-          processedData = [response.data];
-        }
-        
-        console.log("Processed data:", processedData);
-        setData(processedData);
+      const result = await fetchDataFromLangChain(question);
+
+      if (result.success) {
+        setData(result.data);
+        setSqlQuery(result.sqlQuery);
+        setUserQuestion(result.userQuestion);
+        setError(null);
       } else {
-        throw new Error("No data received from LangChain backend");
+        // Fallback to mock data if API fails
+        console.log("🔄 Falling back to mock data");
+        const mockResult = generateMockData();
+        setData(mockResult.data);
+        setSqlQuery(mockResult.sqlQuery);
+        setUserQuestion(mockResult.userQuestion);
+        setError(formatAPIError(result.error));
       }
     } catch (error) {
-      console.error("LangChain backend query failed:", error);
-      console.log("Error details:", error.response?.data || error.message);
-      console.log("Falling back to mock data");
-      // Fallback to mock data if API fails
-      generateMockData();
+      console.error("Unexpected error:", error);
+      // Fallback to mock data
+      const mockResult = generateMockData();
+      setData(mockResult.data);
+      setSqlQuery(mockResult.sqlQuery);
+      setUserQuestion(mockResult.userQuestion);
+      setError("Unexpected error occurred. Using mock data.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate mock data similar to what we'd expect from the API
-  const generateMockData = () => {
-    const mockData = [];
-    const bayCodes = ["A1", "A2", "B1", "B2", "C1", "C2"];
-    const shipmentComparts = ["Container1", "Container2", "Bulk", "Liquid"];
-
-    for (let i = 0; i < 50; i++) {
-      mockData.push({
-        BayCode: bayCodes[Math.floor(Math.random() * bayCodes.length)],
-        GrossQuantity: Math.floor(Math.random() * 100) + 10,
-        ShipmentID: `S${1000 + i}`,
-        FlowRate: Math.random() * 50 + 10,
-        BaseProductID: `P${100 + Math.floor(Math.random() * 50)}`,
-        ShipmentCompart:
-          shipmentComparts[Math.floor(Math.random() * shipmentComparts.length)],
-        ExitTime_DayOfWeek: [
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-        ][Math.floor(Math.random() * 5)],
-        BaseProductCode: Math.floor(Math.random() * 1000) + 100,
-        ShipmentCode: Math.floor(Math.random() * 10000) + 1000,
-        ExitTime: new Date(
-          Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000
-        ).toISOString(),
-        ScheduledDate: new Date(
-          Date.now() + Math.random() * 10 * 24 * 60 * 60 * 1000
-        ).toISOString(),
-      });
-    }
-    setData(mockData);
-  };
-
-  // Transform data for GraphicWalker
   const getGraphicWalkerData = () => {
-    if (!data.length) return { dataSource: [], fields: [] };
-
-    // Define field metadata for GraphicWalker
-    const fields = [
-      {
-        fid: "BayCode",
-        name: "Bay Code",
-        semanticType: "nominal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "ShipmentCompart",
-        name: "Shipment Compartment",
-        semanticType: "nominal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "BaseProductID",
-        name: "Base Product ID",
-        semanticType: "nominal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "ShipmentID",
-        name: "Shipment ID",
-        semanticType: "nominal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "ExitTime_DayOfWeek",
-        name: "Exit Day of Week",
-        semanticType: "nominal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "GrossQuantity",
-        name: "Gross Quantity",
-        semanticType: "quantitative",
-        analyticType: "measure",
-      },
-      {
-        fid: "FlowRate",
-        name: "Flow Rate",
-        semanticType: "quantitative",
-        analyticType: "measure",
-      },
-      {
-        fid: "BaseProductCode",
-        name: "Base Product Code",
-        semanticType: "quantitative",
-        analyticType: "measure",
-      },
-      {
-        fid: "ShipmentCode",
-        name: "Shipment Code",
-        semanticType: "quantitative",
-        analyticType: "measure",
-      },
-      {
-        fid: "ExitTime",
-        name: "Exit Time",
-        semanticType: "temporal",
-        analyticType: "dimension",
-      },
-      {
-        fid: "ScheduledDate",
-        name: "Scheduled Date",
-        semanticType: "temporal",
-        analyticType: "dimension",
-      },
-    ];
-
-    return {
-      dataSource: data,
-      fields,
-    };
+    return generateGraphicWalkerFields(data);
   };
 
-  // Generate AI visualization (bar chart of shipment distribution by bay code)
   const generateAIVisualization = () => {
     if (!data.length) return;
 
-    const spec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      title: "Shipment Distribution by Bay Code",
-      data: { values: data },
-      mark: "bar",
-      encoding: {
-        x: { field: "BayCode", type: "nominal", title: "Bay Code" },
-        y: {
-          aggregate: "sum",
-          field: "GrossQuantity",
-          type: "quantitative",
-          title: "Gross Quantity",
-        },
-        color: {
-          field: "BayCode",
-          type: "nominal",
-          scale: { scheme: "category10" },
-        },
-      },
-      width: 500,
-      height: 300,
-    };
+    try {
+      const spec = generateDynamicChart(data, sqlQuery, userQuestion);
 
-    vegaEmbed(chartRef.current, spec, { actions: false })
-      .then(() => setAiGenerated(true))
-      .catch(console.error);
+      vegaEmbed(chartRef.current, spec, {
+        actions: false,
+        tooltip: true,
+        renderer: "svg",
+      })
+        .then(() => setAiGenerated(true))
+        .catch(console.error);
+    } catch (error) {
+      console.error("Error generating visualization:", error);
+      setAiGenerated(false);
+    }
   };
 
   useEffect(() => {
     fetchData("Show me a general overview of my shipment data");
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (data.length > 0) {
       generateAIVisualization();
     }
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data]);
 
-  // Handle custom query submission
   const handleCustomQuery = async () => {
     if (queryInput.trim()) {
       await fetchData(queryInput);
@@ -228,33 +103,26 @@ const Analytics = () => {
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleCustomQuery();
     }
   };
 
-  // Test API connectivity
   const testAPIConnectivity = async () => {
     setLoading(true);
     try {
-      const baseUrl = "https://langchain-backend.loca.lt";
-      console.log("Testing LangChain backend connectivity...");
+      const result = await testLangChainConnectivity();
 
-      // Test the query endpoint with a simple question
-      const testResponse = await axios.post(`${baseUrl}/query`, {
-        question: "Test connection"
-      }, { 
-        timeout: 10000,
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        }
-      });
-      console.log("LangChain backend is reachable:", testResponse.status);
-      console.log("Test response:", testResponse.data);
+      if (result.success) {
+        console.log(" Connection test successful!");
+        setError(null);
+      } else {
+        console.log("Connection test failed");
+        setError(formatAPIError(result.error));
+      }
     } catch (error) {
-      console.error("LangChain backend connectivity test failed:", error);
-      console.log("Error details:", error.response?.data || error.message);
+      console.error("Unexpected error during connectivity test:", error);
+      setError("Unexpected error during connectivity test");
     } finally {
       setLoading(false);
     }
@@ -266,9 +134,9 @@ const Analytics = () => {
         <h1 className="dashboard-title">AI-Powered Analytics</h1>
         {aiGenerated && (
           <div className="ai-status">
-            <span className="ai-badge">AI bar chart generated</span>
+            <span className="ai-badge">AI visualization generated</span>
             <span className="ai-details">
-              X-axis: BayCodeID • Y-axis: GrossQuantity
+              Dynamic chart based on your query: "{userQuestion}"
             </span>
           </div>
         )}
@@ -295,7 +163,27 @@ const Analytics = () => {
         )}
       </div>
 
-      {/* AI Query Section */}
+      {sqlQuery && (
+        <div className="sql-query-section">
+          <div className="sql-header">
+            <h3>Generated SQL Query:</h3>
+            <span className="sql-badge">AI Generated</span>
+          </div>
+          <div className="sql-code">
+            <code>{sqlQuery}</code>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="error-section">
+          <div className="error-message">
+            <span className="error-icon">⚠️</span>
+            {error}
+          </div>
+        </div>
+      )}
+
       <div className="query-section">
         <div className="query-input-container">
           <input
@@ -307,9 +195,9 @@ const Analytics = () => {
             className="query-input"
             disabled={loading}
           />
-          <button 
-            onClick={handleCustomQuery} 
-            disabled={loading || !queryInput.trim()} 
+          <button
+            onClick={handleCustomQuery}
+            disabled={loading || !queryInput.trim()}
             className="query-btn"
           >
             {loading ? "Processing..." : "Ask AI"}
@@ -350,11 +238,10 @@ const Analytics = () => {
       </div>
 
       {activeView === "charts" ? (
-        /* AI-Generated Visualization Section */
         <div className="visualization-section">
           <div className="section-header">
             <h2>AI-Generated Visualization</h2>
-            <p>Automatically created based on your query</p>
+            <p>Dynamically created based on data structure and your query</p>
           </div>
           <div className="chart-container">
             {loading ? (
@@ -365,7 +252,6 @@ const Analytics = () => {
           </div>
         </div>
       ) : (
-        /* GraphicWalker Section */
         <div className="graphicwalker-section">
           <div className="section-header">
             <h2>GraphicWalker - Advanced Data Exploration</h2>
@@ -378,17 +264,42 @@ const Analytics = () => {
               Loading data for GraphicWalker...
             </div>
           ) : data.length > 0 ? (
-            <div className="graphicwalker-container">
-              <GraphicWalker
-                dataSource={getGraphicWalkerData().dataSource}
-                fields={getGraphicWalkerData().fields}
-                spec={[]}
-                i18nLang="en-US"
-                dark="light"
-                themeKey="vega"
-                storeRef={null}
-              />
-            </div>
+            (() => {
+              const validation = validateDataForGraphicWalker(data);
+              const graphicWalkerData = getGraphicWalkerData();
+
+              return (
+                <div>
+                  {!validation.isValid && (
+                    <div className="graphicwalker-warning">
+                      <span className="warning-icon">⚠️</span>
+                      <span>{validation.reason}</span>
+                    </div>
+                  )}
+                  {validation.suggestions.length > 0 && (
+                    <div className="graphicwalker-suggestions">
+                      <strong>Suggestions:</strong>
+                      <ul>
+                        {validation.suggestions.map((suggestion, index) => (
+                          <li key={index}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="graphicwalker-container">
+                    <GraphicWalker
+                      dataSource={graphicWalkerData.dataSource}
+                      fields={graphicWalkerData.fields}
+                      spec={[]}
+                      i18nLang="en-US"
+                      dark="light"
+                      themeKey="vega"
+                      storeRef={null}
+                    />
+                  </div>
+                </div>
+              );
+            })()
           ) : (
             <div className="no-data">No data available for visualization</div>
           )}

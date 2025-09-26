@@ -33,7 +33,6 @@ const Dashboard = () => {
         Real-time insights from 0 shipment records
       </p>
 
-      {/* Metrics Grid */}
       <div className="metrics-grid">
         {metrics.map((metric, index) => (
           <MetricCard
@@ -45,7 +44,6 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* AI Assistant Section */}
       <AIAssistant />
     </main>
   );
