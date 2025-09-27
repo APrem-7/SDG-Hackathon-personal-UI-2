@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const LANGCHAIN_BASE_URL = "https://langchain-backend.loca.lt";
-const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const DEFAULT_TIMEOUT = 60000; // 60 seconds
 
 export const fetchDataFromLangChain = async (
   userQuestion = "Show me all shipment data for analytics"

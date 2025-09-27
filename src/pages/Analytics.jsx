@@ -85,9 +85,9 @@ const Analytics = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData("Show me a general overview of my shipment data");
-  }, []);
+  // useEffect(() => {
+  //   fetchData("Show me a general overview of my shipment data");
+  // }, []);
 
   useEffect(() => {
     if (data.length > 0) {
@@ -221,13 +221,13 @@ const Analytics = () => {
         >
           GraphicWalker
         </button>
-        <button
+        {/* <button
           className="view-button api-test"
           onClick={testAPIConnectivity}
           disabled={loading}
         >
           Test API
-        </button>
+        </button> */}
         <button
           className="view-button refresh"
           onClick={() => fetchData("Show me a general overview of the data")}
